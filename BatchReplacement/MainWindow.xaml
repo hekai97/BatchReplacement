@@ -79,7 +79,7 @@
             <materialDesign:Card Width="600" Height="400" UniformCornerRadius="10" Margin="20,20,20,0">
                 <StackPanel>
                     <TextBlock x:Name="ConsoleTitle" FontFamily="微软雅黑" Style="{DynamicResource MaterialDesignHeadline6TextBlock}">文件列表：</TextBlock>
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto" Height="350" Margin="10,10,10,10">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Height="350" Margin="10,10,10,10">
                         <TextBlock x:Name="ResultTextBlock" FontFamily="微软雅黑">
                             
                         </TextBlock>
