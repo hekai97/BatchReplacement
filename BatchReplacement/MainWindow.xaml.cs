@@ -29,7 +29,7 @@ namespace BatchReplacement
         {
             InitializeComponent();
         }
-        FileInfo singleFile = null;
+        FileInfo? singleFile = null;
         //选择文件夹时所有的后缀名
         List<string> suffixList=new List<string>();
         //选择的文件夹中找到的所有的文本文件
@@ -58,9 +58,23 @@ namespace BatchReplacement
             var result=openFileDialog.ShowDialog();
             if (result == System.Windows.Forms.DialogResult.OK)
             {
+                if (Utils.IsBinary(openFileDialog.FileName))
+                {
+                    TipMessage.Text = "请选择文本文件而不是二进制文件！";
+                    MyDialog.IsOpen = true;
+                    return;
+                }
                 this.SelectedFilePathTextBox.Text = openFileDialog.FileName;
             }
+            this.ResultTextBlock.Text = openFileDialog.FileName;
+            singleFile =new FileInfo(openFileDialog.FileName);
             selectedFunction = SelectedFunction.FILE;
+            canConvert = false;
+
+            suffixList.Clear();
+            this.SuffixComboBox.ItemsSource = null;
+            fileList.Clear();
+            this.SelectedFolderPathTextBox.Text = "";
         }
         private void SelectFolder(object sender, RoutedEventArgs e)
         {
@@ -82,6 +96,10 @@ namespace BatchReplacement
                 this.SuffixComboBox.ItemsSource = suffixList;
             }
             selectedFunction=SelectedFunction.FOLDER;
+            canConvert = false;
+
+            singleFile = null;
+            this.SelectedFilePathTextBox.Text = "";
         }
         private void SearchChildernFile(DirectoryInfo fileDirectory, ref List<FileInfo> childernFiles)
         {
@@ -159,36 +177,6 @@ namespace BatchReplacement
             //每次下拉栏变化的时候，就将转换的值转成false
             canConvert=false;
         }
-
-        private void ConvertButtonClick(object sender, RoutedEventArgs e)
-        {
-            if (singleFile == null && fileList.Count == 0)
-            {
-                TipMessage.Text = "请先选择文件或者文件夹！";
-                MyDialog.IsOpen = true;
-                return;
-            }
-            if (SuffixComboBox.SelectedIndex <= 0)
-            {
-                TipMessage.Text = "请选择要转换的文件后缀名！";
-                MyDialog.IsOpen = true;
-                return;
-            }
-            if (String.IsNullOrEmpty(SourceCharacterTextBox.Text))
-            {
-                TipMessage.Text = "请输入待转换的文字！";
-                MyDialog.IsOpen = true;
-                return;
-            }
-            if (String.IsNullOrEmpty(TargetCharacterTextBox.Text))
-            {
-                TipMessage.Text = "请输入转换后的文字！";
-                MyDialog.IsOpen = true;
-                return;
-            }
-            ConvertFileCharacter();
-        }
-
         private void PreviewButtonClick(object sender, RoutedEventArgs e)
         {
             if (singleFile == null && fileList.Count == 0)
@@ -197,11 +185,14 @@ namespace BatchReplacement
                 MyDialog.IsOpen = true;
                 return;
             }
-            if (SuffixComboBox.SelectedIndex <= 0)
+            if (selectedFunction != SelectedFunction.FILE)
             {
-                TipMessage.Text = "请选择要转换的文件后缀名！";
-                MyDialog.IsOpen = true;
-                return;
+                if (SuffixComboBox.SelectedIndex <= 0)
+                {
+                    TipMessage.Text = "请选择要转换的文件后缀名！";
+                    MyDialog.IsOpen = true;
+                    return;
+                }
             }
             if (String.IsNullOrEmpty(SourceCharacterTextBox.Text))
             {
@@ -215,42 +206,137 @@ namespace BatchReplacement
                 MyDialog.IsOpen = true;
                 return;
             }
-
+            sourceStr = SourceCharacterTextBox.Text;
+            targetStr = TargetCharacterTextBox.Text;
             PreviewConvert();
+        }
+
+        private void ConvertButtonClick(object sender, RoutedEventArgs e)
+        {
+            //if (singleFile == null && fileList.Count == 0)
+            //{
+            //    TipMessage.Text = "请先选择文件或者文件夹！";
+            //    MyDialog.IsOpen = true;
+            //    return;
+            //}
+            //if (SuffixComboBox.SelectedIndex <= 0)
+            //{
+            //    TipMessage.Text = "请选择要转换的文件后缀名！";
+            //    MyDialog.IsOpen = true;
+            //    return;
+            //}
+            //if (String.IsNullOrEmpty(SourceCharacterTextBox.Text))
+            //{
+            //    TipMessage.Text = "请输入待转换的文字！";
+            //    MyDialog.IsOpen = true;
+            //    return;
+            //}
+            //if (String.IsNullOrEmpty(TargetCharacterTextBox.Text))
+            //{
+            //    TipMessage.Text = "请输入转换后的文字！";
+            //    MyDialog.IsOpen = true;
+            //    return;
+            //}
+            if (!canConvert)
+            {
+                TipMessage.Text = "请先预览，防止转换错误！";
+                MyDialog.IsOpen = true;
+                return;
+            }
+            if (SourceCharacterTextBox.Text != sourceStr)
+            {
+                TipMessage.Text = "请不要修改源字符串，请重新预览，防止转换错误！";
+                MyDialog.IsOpen = true;
+                return;
+            }
+            if (TargetCharacterTextBox.Text != targetStr)
+            {
+                TipMessage.Text = "请不要修改目的字符串，请重新预览，防止转换错误！";
+                MyDialog.IsOpen = true;
+                return;
+            }
+            if (selectedFunction == SelectedFunction.FILE)
+            {
+                ConvertSingleFileCharacter();
+            }
+            else if (selectedFunction == SelectedFunction.FOLDER)
+            {
+                ConvertFileCharacter();
+            }
         }
 
         private void PreviewConvert()
         {
-            string suffix = suffixList[SuffixComboBox.SelectedIndex];
-            string source = SourceCharacterTextBox.Text;
-            string target = TargetCharacterTextBox.Text;
-            ConsoleTitle.Text = "替换结果：";
             this.ResultTextBlock.Text = "";
-            foreach (FileInfo f in fileList)
+            if (selectedFunction == SelectedFunction.FILE)
             {
-                if (f.Name.EndsWith(suffix))
+                this.ResultTextBlock.Text = $"即将预览单个文本转换的结果，该文本的路径为{SelectedFilePathTextBox.Text}";
+                string text = File.ReadAllText(singleFile!.FullName);
+                Match match = Regex.Match(text, sourceStr!);
+                if (match.Success)
                 {
-                    string text = File.ReadAllText(f.FullName);
-                    Match match = Regex.Match(text, source);
-                    if (match.Success)
+                    MatchCollection matches = Regex.Matches(text, sourceStr!);
+                    this.ResultTextBlock.Text += $"\n在{singleFile.FullName}文件中找到{matches.Count}个匹配{sourceStr}的项：";
+                    foreach (Match m in matches)
                     {
-                        MatchCollection matches = Regex.Matches(text, source);
-                        this.ResultTextBlock.Text += $"\n在{f.FullName}文件中找到{matches.Count}个匹配{source}的项：";
-                        foreach (Match m in matches)
+                        this.ResultTextBlock.Text += $"\n{m.Value} 在文件{singleFile.FullName}中的{m.Index}位置，长度为{m.Length}.";
+                    }
+                }
+                else
+                {
+                    this.ResultTextBlock.Text += $"\n在{singleFile.FullName}文件中没有找到与{sourceStr}匹配的项：";
+                }
+                this.ResultTextBlock.Text += "\n预览完成！";
+                canConvert = true;
+            }
+            else if(selectedFunction == SelectedFunction.FOLDER)
+            {
+                this.ResultTextBlock.Text = $"即将预览整个文件夹中所有{suffixList[SuffixComboBox.SelectedIndex]}转换的结果，该文本的路径为{SelectedFolderPathTextBox.Text}";
+
+                string suffix = suffixList[SuffixComboBox.SelectedIndex];
+                string source = SourceCharacterTextBox.Text;
+                string target = TargetCharacterTextBox.Text;
+                ConsoleTitle.Text = "预览结果：";
+                foreach (FileInfo f in fileList)
+                {
+                    if (f.Name.EndsWith(suffix))
+                    {
+                        string text = File.ReadAllText(f.FullName);
+                        Match match = Regex.Match(text, source);
+                        if (match.Success)
                         {
-                            this.ResultTextBlock.Text += $"\n{m.Value} 在文件{f.FullName}中的{m.Index}位置，长度为{m.Length}.";
+                            MatchCollection matches = Regex.Matches(text, source);
+                            this.ResultTextBlock.Text += $"\n在{f.FullName}文件中找到{matches.Count}个匹配{source}的项：";
+                            foreach (Match m in matches)
+                            {
+                                this.ResultTextBlock.Text += $"\n{m.Value} 在文件{f.FullName}中的{m.Index}位置，长度为{m.Length}.";
+                            }
                         }
                     }
                 }
+                this.ResultTextBlock.Text += "\n预览完成！";
+                canConvert = true;
+            }  
+        }
+
+        private void ConvertSingleFileCharacter()
+        {
+            ConsoleTitle.Text = "替换结果：";
+            this.ResultTextBlock.Text = "";
+            string text = File.ReadAllText(singleFile!.FullName);
+            Match match = Regex.Match(text, sourceStr!);
+            if (match.Success)
+            {
+                string newText = Regex.Replace(text, sourceStr!, targetStr!);
+                this.ResultTextBlock.Text += $"\n{singleFile.FullName}文件中的关键字{sourceStr}已经被替换成了{targetStr}.";
+                File.WriteAllText(singleFile.FullName, newText);
             }
-            this.ResultTextBlock.Text += "\n预览完成！";
+            this.ResultTextBlock.Text += "\n替换完成！";
         }
 
         private void ConvertFileCharacter()
         {
             string suffix = suffixList[SuffixComboBox.SelectedIndex];
-            string source = SourceCharacterTextBox.Text;
-            string target=TargetCharacterTextBox.Text;
             ConsoleTitle.Text = "替换结果：";
             this.ResultTextBlock.Text = "";
             foreach(FileInfo f in fileList)
@@ -258,23 +344,11 @@ namespace BatchReplacement
                 if (f.Name.EndsWith(suffix))
                 {
                     string text=File.ReadAllText(f.FullName);
-                    Match match=Regex.Match(text,source);
+                    Match match=Regex.Match(text,sourceStr!);
                     if (match.Success)
                     {
-                        //this.ResultTextBlock.Text += $"\n在{f.FullName}文件中找到{match}";
-                        //while (match.Success)
-                        //{
-                        //    this.ResultTextBlock.Text += $"\n{match.Index}位置上的";
-                        //    match=match.NextMatch();
-                        //}
-                        MatchCollection matches = Regex.Matches(text, source);
-                        this.ResultTextBlock.Text += $"\n在{f.FullName}文件中找到{matches.Count}个匹配{source}的项：";
-                        foreach (Match m in matches)
-                        {
-                            this.ResultTextBlock.Text += $"\n{m.Value} 在文件{f.FullName}中的{m.Index}位置，长度为{m.Length}.";
-                        }
-                        string newText = Regex.Replace(text, source, target);
-                        this.ResultTextBlock.Text += $"\n{f.FullName}文件中的关键字{source}已经被替换成了{target}.";
+                        string newText = Regex.Replace(text, sourceStr!, targetStr!);
+                        this.ResultTextBlock.Text += $"\n{f.FullName}文件中的关键字{sourceStr}已经被替换成了{targetStr}.";
                         File.WriteAllText(f.FullName, newText);
                     }
                 }
